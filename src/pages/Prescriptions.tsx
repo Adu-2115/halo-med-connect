@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+
+import React, { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import { 
   FileText, 
@@ -75,80 +76,24 @@ import { Label } from "@/components/ui/label";
 import { useForm } from "react-hook-form";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-
-const initialPrescriptions = [
-  {
-    id: "PRES-1001",
-    patient: "Amit Kumar",
-    doctor: "Dr. Rajesh Sharma",
-    date: "2025-04-10",
-    status: "pending",
-    items: [
-      { name: "Paracetamol 500mg", dosage: "1 tablet three times a day after meals", duration: "5 days" },
-      { name: "Cetirizine 10mg", dosage: "1 tablet at night", duration: "3 days" },
-    ],
-    notes: "Patient has fever and cold symptoms",
-    imageUrl: "https://images.unsplash.com/photo-1649972904349-6e44c42644a7?q=80&w=400&auto=format",
-  },
-  {
-    id: "PRES-1002",
-    patient: "Priya Singh",
-    doctor: "Dr. Neha Gupta",
-    date: "2025-04-12",
-    status: "completed",
-    items: [
-      { name: "Amoxicillin 250mg", dosage: "1 capsule twice a day after meals", duration: "7 days" },
-      { name: "Ibuprofen 400mg", dosage: "1 tablet as needed for pain", duration: "3 days" },
-      { name: "Vitamin D3", dosage: "1 tablet weekly", duration: "12 weeks" },
-    ],
-    notes: "Patient has throat infection. Allergic to penicillin.",
-    imageUrl: null,
-  },
-  {
-    id: "PRES-1003",
-    patient: "Rahul Verma",
-    doctor: "Dr. Sanjay Patel",
-    date: "2025-04-13",
-    status: "rejected",
-    items: [
-      { name: "Atorvastatin 10mg", dosage: "1 tablet daily at night", duration: "30 days" },
-      { name: "Aspirin 75mg", dosage: "1 tablet daily after breakfast", duration: "30 days" },
-    ],
-    notes: "Rejected due to unavailability of Atorvastatin. Asked patient to visit again.",
-    imageUrl: "https://images.unsplash.com/photo-1600191763305-f4720365d3d3?q=80&w=400&auto=format",
-  },
-  {
-    id: "PRES-1004",
-    patient: "Meena Sharma",
-    doctor: "Dr. Priya Patel",
-    date: "2025-04-14",
-    status: "pending",
-    items: [
-      { name: "Metformin 500mg", dosage: "1 tablet twice a day after meals", duration: "30 days" },
-      { name: "Vitamin B12", dosage: "1 tablet daily", duration: "30 days" },
-    ],
-    notes: "Regular diabetic medication",
-    imageUrl: null,
-  },
-  {
-    id: "PRES-1005",
-    patient: "Sanjay Kumar",
-    doctor: "Dr. Vikram Singh",
-    date: "2025-04-15",
-    status: "pending",
-    items: [
-      { name: "Pantoprazole 40mg", dosage: "1 tablet before breakfast", duration: "14 days" },
-      { name: "Domperidone 10mg", dosage: "1 tablet three times a day before meals", duration: "7 days" },
-    ],
-    notes: "Patient has gastric issues",
-    imageUrl: null,
-  },
-];
+import { supabase } from "@/integrations/supabase/client";
 
 interface PrescriptionItem {
   name: string;
   dosage: string;
   duration: string;
+}
+
+interface Prescription {
+  id: string;
+  prescription_id: string;
+  patient: string;
+  doctor: string;
+  date: string;
+  status: "pending" | "completed" | "rejected";
+  items: PrescriptionItem[];
+  notes: string;
+  imageUrl: string | null;
 }
 
 interface PrescriptionForm {
@@ -161,12 +106,13 @@ interface PrescriptionForm {
 
 const Prescriptions: React.FC = () => {
   const { user } = useAuth();
-  const [prescriptions, setPrescriptions] = useState(initialPrescriptions);
+  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showViewDialog, setShowViewDialog] = useState(false);
-  const [selectedPrescription, setSelectedPrescription] = useState<any>(null);
+  const [selectedPrescription, setSelectedPrescription] = useState<Prescription | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const form = useForm<PrescriptionForm>({
@@ -178,43 +124,193 @@ const Prescriptions: React.FC = () => {
     },
   });
 
+  // Fetch prescriptions from Supabase
+  const fetchPrescriptions = async () => {
+    setIsLoading(true);
+    try {
+      const { data: prescriptionsData, error: prescriptionsError } = await supabase
+        .from('prescriptions_data')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (prescriptionsError) {
+        throw prescriptionsError;
+      }
+
+      const prescriptionsWithItems = await Promise.all(
+        prescriptionsData.map(async (prescription) => {
+          const { data: itemsData, error: itemsError } = await supabase
+            .from('prescription_items')
+            .select('*')
+            .eq('prescription_id', prescription.prescription_id);
+
+          if (itemsError) {
+            throw itemsError;
+          }
+
+          return {
+            id: prescription.id,
+            prescription_id: prescription.prescription_id,
+            patient: prescription.patient,
+            doctor: prescription.doctor,
+            date: prescription.date,
+            status: prescription.status,
+            notes: prescription.notes,
+            imageUrl: prescription.image_url,
+            items: itemsData
+          };
+        })
+      );
+
+      setPrescriptions(prescriptionsWithItems);
+    } catch (error) {
+      console.error('Error fetching prescriptions:', error);
+      toast.error('Failed to load prescriptions');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Load prescriptions on component mount
+  useEffect(() => {
+    fetchPrescriptions();
+  }, []);
+
   const filteredPrescriptions = prescriptions.filter((prescription) => {
     const matchesSearch = 
       prescription.patient.toLowerCase().includes(searchQuery.toLowerCase()) ||
       prescription.doctor.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      prescription.id.toLowerCase().includes(searchQuery.toLowerCase());
+      prescription.prescription_id.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesStatus = statusFilter === "all" || prescription.status === statusFilter;
     
     return matchesSearch && matchesStatus;
   });
 
-  const onSubmit = (data: PrescriptionForm) => {
-    const imageUrl = imagePreview;
-    
-    const newPrescription = {
-      id: `PRES-${1000 + prescriptions.length + 1}`,
-      patient: data.patient,
-      doctor: data.doctor,
-      date: new Date().toISOString().split('T')[0],
-      status: "pending",
-      items: data.items.filter(item => item.name.trim() !== ""),
-      notes: data.notes,
-      imageUrl: imageUrl,
-    };
-    
-    setPrescriptions([newPrescription, ...prescriptions]);
-    
-    setShowAddDialog(false);
-    setImagePreview(null);
-    form.reset({
-      patient: "",
-      doctor: "",
-      notes: "",
-      items: [{ name: "", dosage: "", duration: "" }],
-    });
-    
-    toast.success("Prescription added successfully");
+  // Upload image to Supabase Storage
+  const uploadImage = async (file: File): Promise<string | null> => {
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+      const filePath = `prescriptions/${fileName}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('prescriptions')
+        .upload(filePath, file);
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data } = supabase.storage
+        .from('prescriptions')
+        .getPublicUrl(filePath);
+
+      return data.publicUrl;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      toast.error('Failed to upload image');
+      return null;
+    }
+  };
+
+  // Save prescription to Supabase
+  const savePrescription = async (prescription: any, items: PrescriptionItem[]) => {
+    try {
+      // Insert prescription
+      const { data: prescriptionData, error: prescriptionError } = await supabase
+        .from('prescriptions_data')
+        .insert([prescription])
+        .select();
+
+      if (prescriptionError) {
+        throw prescriptionError;
+      }
+
+      // Insert prescription items
+      const itemsWithPrescriptionId = items.map(item => ({
+        ...item,
+        prescription_id: prescription.prescription_id
+      }));
+
+      const { error: itemsError } = await supabase
+        .from('prescription_items')
+        .insert(itemsWithPrescriptionId);
+
+      if (itemsError) {
+        throw itemsError;
+      }
+
+      return prescriptionData[0];
+    } catch (error) {
+      console.error('Error saving prescription:', error);
+      throw error;
+    }
+  };
+
+  // Update prescription status in Supabase
+  const updatePrescriptionStatus = async (prescriptionId: string, status: string) => {
+    try {
+      const { error } = await supabase
+        .from('prescriptions_data')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('prescription_id', prescriptionId);
+
+      if (error) {
+        throw error;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error updating prescription status:', error);
+      throw error;
+    }
+  };
+
+  const onSubmit = async (data: PrescriptionForm) => {
+    try {
+      let imageUrl = null;
+      
+      if (data.imageFile && data.imageFile[0]) {
+        imageUrl = await uploadImage(data.imageFile[0]);
+      }
+      
+      const newPrescriptionId = `PRES-${1000 + prescriptions.length + 1}`;
+      
+      const newPrescription = {
+        prescription_id: newPrescriptionId,
+        patient: data.patient,
+        doctor: data.doctor,
+        date: new Date().toISOString().split('T')[0],
+        status: "pending",
+        notes: data.notes,
+        image_url: imageUrl,
+      };
+      
+      // Filter out empty items
+      const validItems = data.items.filter(item => item.name.trim() !== "");
+      
+      // Save prescription to Supabase
+      await savePrescription(newPrescription, validItems);
+      
+      toast.success("Prescription added successfully");
+      
+      // Reset form and close dialog
+      setShowAddDialog(false);
+      setImagePreview(null);
+      form.reset({
+        patient: "",
+        doctor: "",
+        notes: "",
+        items: [{ name: "", dosage: "", duration: "" }],
+      });
+      
+      // Refresh prescriptions
+      fetchPrescriptions();
+    } catch (error) {
+      console.error('Error submitting prescription:', error);
+      toast.error('Failed to add prescription');
+    }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -243,26 +339,34 @@ const Prescriptions: React.FC = () => {
     }
   };
 
-  const viewPrescription = (prescription: any) => {
+  const viewPrescription = (prescription: Prescription) => {
     setSelectedPrescription(prescription);
     setShowViewDialog(true);
   };
 
-  const updateStatus = (id: string, status: string) => {
-    setPrescriptions(
-      prescriptions.map((p) =>
-        p.id === id ? { ...p, status } : p
-      )
-    );
-    
-    if (selectedPrescription?.id === id) {
-      setSelectedPrescription({
-        ...selectedPrescription,
-        status,
-      });
+  const updateStatus = async (id: string, status: string) => {
+    try {
+      await updatePrescriptionStatus(id, status);
+      
+      // Update local state
+      setPrescriptions(
+        prescriptions.map((p) =>
+          p.prescription_id === id ? { ...p, status: status as "pending" | "completed" | "rejected" } : p
+        )
+      );
+      
+      if (selectedPrescription?.prescription_id === id) {
+        setSelectedPrescription({
+          ...selectedPrescription,
+          status: status as "pending" | "completed" | "rejected",
+        });
+      }
+      
+      toast.success(`Prescription ${status === "completed" ? "approved" : "rejected"}`);
+    } catch (error) {
+      console.error('Error updating status:', error);
+      toast.error('Failed to update prescription status');
     }
-    
-    toast.success(`Prescription ${status === "completed" ? "approved" : "rejected"}`);
   };
 
   const isAdmin = user?.role === "admin";
@@ -272,6 +376,22 @@ const Prescriptions: React.FC = () => {
   const customerPrescriptions = isCustomer 
     ? filteredPrescriptions.filter(p => p.patient === "Amit Kumar") 
     : filteredPrescriptions;
+
+  // Create storage bucket for prescriptions if it doesn't exist
+  useEffect(() => {
+    const createStorageBucket = async () => {
+      const { data, error } = await supabase.storage.getBucket('prescriptions');
+      
+      if (error && error.message.includes('does not exist')) {
+        // Bucket doesn't exist, create it
+        await supabase.storage.createBucket('prescriptions', {
+          public: true
+        });
+      }
+    };
+    
+    createStorageBucket();
+  }, []);
 
   return (
     <Layout>
@@ -363,9 +483,15 @@ const Prescriptions: React.FC = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {customerPrescriptions
-                        .filter(p => p.status === "pending")
-                        .length === 0 ? (
+                      {isLoading ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center h-24">
+                            Loading prescriptions...
+                          </TableCell>
+                        </TableRow>
+                      ) : customerPrescriptions
+                          .filter(p => p.status === "pending")
+                          .length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={6} className="text-center h-24">
                             No active prescriptions found
@@ -376,7 +502,7 @@ const Prescriptions: React.FC = () => {
                           .filter(p => p.status === "pending")
                           .map((prescription) => (
                             <TableRow key={prescription.id}>
-                              <TableCell className="font-medium">{prescription.id}</TableCell>
+                              <TableCell className="font-medium">{prescription.prescription_id}</TableCell>
                               <TableCell>{prescription.patient}</TableCell>
                               <TableCell>{prescription.doctor}</TableCell>
                               <TableCell>
@@ -402,7 +528,7 @@ const Prescriptions: React.FC = () => {
                                       <Button
                                         variant="outline"
                                         size="sm"
-                                        onClick={() => updateStatus(prescription.id, "completed")}
+                                        onClick={() => updateStatus(prescription.prescription_id, "completed")}
                                         className="text-green-600 border-green-200 hover:bg-green-50"
                                       >
                                         <Check className="h-4 w-4 mr-1" />
@@ -411,7 +537,7 @@ const Prescriptions: React.FC = () => {
                                       <Button
                                         variant="outline"
                                         size="sm"
-                                        onClick={() => updateStatus(prescription.id, "rejected")}
+                                        onClick={() => updateStatus(prescription.prescription_id, "rejected")}
                                         className="text-red-600 border-red-200 hover:bg-red-50"
                                       >
                                         <X className="h-4 w-4 mr-1" />
@@ -453,9 +579,15 @@ const Prescriptions: React.FC = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {customerPrescriptions
-                        .filter(p => p.status === "completed")
-                        .length === 0 ? (
+                      {isLoading ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center h-24">
+                            Loading prescriptions...
+                          </TableCell>
+                        </TableRow>
+                      ) : customerPrescriptions
+                          .filter(p => p.status === "completed")
+                          .length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={6} className="text-center h-24">
                             No completed prescriptions found
@@ -466,7 +598,7 @@ const Prescriptions: React.FC = () => {
                           .filter(p => p.status === "completed")
                           .map((prescription) => (
                             <TableRow key={prescription.id}>
-                              <TableCell className="font-medium">{prescription.id}</TableCell>
+                              <TableCell className="font-medium">{prescription.prescription_id}</TableCell>
                               <TableCell>{prescription.patient}</TableCell>
                               <TableCell>{prescription.doctor}</TableCell>
                               <TableCell>
@@ -520,9 +652,15 @@ const Prescriptions: React.FC = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {customerPrescriptions
-                          .filter(p => p.status === "rejected")
-                          .length === 0 ? (
+                        {isLoading ? (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center h-24">
+                              Loading prescriptions...
+                            </TableCell>
+                          </TableRow>
+                        ) : customerPrescriptions
+                            .filter(p => p.status === "rejected")
+                            .length === 0 ? (
                           <TableRow>
                             <TableCell colSpan={6} className="text-center h-24">
                               No rejected prescriptions found
@@ -533,7 +671,7 @@ const Prescriptions: React.FC = () => {
                             .filter(p => p.status === "rejected")
                             .map((prescription) => (
                               <TableRow key={prescription.id}>
-                                <TableCell className="font-medium">{prescription.id}</TableCell>
+                                <TableCell className="font-medium">{prescription.prescription_id}</TableCell>
                                 <TableCell>{prescription.patient}</TableCell>
                                 <TableCell>{prescription.doctor}</TableCell>
                                 <TableCell>
@@ -557,7 +695,7 @@ const Prescriptions: React.FC = () => {
                                     <Button
                                       variant="outline"
                                       size="sm"
-                                      onClick={() => updateStatus(prescription.id, "pending")}
+                                      onClick={() => updateStatus(prescription.prescription_id, "pending")}
                                     >
                                       <Edit className="h-4 w-4 mr-1" />
                                       Reconsider
@@ -775,7 +913,7 @@ const Prescriptions: React.FC = () => {
               <DialogHeader>
                 <DialogTitle>Prescription Details</DialogTitle>
                 <DialogDescription>
-                  {selectedPrescription.id} - {new Date(selectedPrescription.date).toLocaleDateString("en-IN")}
+                  {selectedPrescription.prescription_id} - {new Date(selectedPrescription.date).toLocaleDateString("en-IN")}
                 </DialogDescription>
               </DialogHeader>
               
@@ -883,7 +1021,7 @@ const Prescriptions: React.FC = () => {
                       variant="outline"
                       className="text-red-600 border-red-200 hover:bg-red-50"
                       onClick={() => {
-                        updateStatus(selectedPrescription.id, "rejected");
+                        updateStatus(selectedPrescription.prescription_id, "rejected");
                       }}
                     >
                       <X className="mr-2 h-4 w-4" />
@@ -893,7 +1031,7 @@ const Prescriptions: React.FC = () => {
                     <Button
                       className="bg-green-600 hover:bg-green-700"
                       onClick={() => {
-                        updateStatus(selectedPrescription.id, "completed");
+                        updateStatus(selectedPrescription.prescription_id, "completed");
                       }}
                     >
                       <Check className="mr-2 h-4 w-4" />

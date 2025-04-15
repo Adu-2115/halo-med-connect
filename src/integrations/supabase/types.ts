@@ -227,6 +227,38 @@ export type Database = {
           },
         ]
       }
+      prescription_items: {
+        Row: {
+          dosage: string
+          duration: string
+          id: string
+          name: string
+          prescription_id: string
+        }
+        Insert: {
+          dosage: string
+          duration: string
+          id?: string
+          name: string
+          prescription_id: string
+        }
+        Update: {
+          dosage?: string
+          duration?: string
+          id?: string
+          name?: string
+          prescription_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prescription_items_prescription_id_fkey"
+            columns: ["prescription_id"]
+            isOneToOne: false
+            referencedRelation: "prescriptions_data"
+            referencedColumns: ["prescription_id"]
+          },
+        ]
+      }
       prescriptions: {
         Row: {
           customer_id: number | null
@@ -265,6 +297,45 @@ export type Database = {
             referencedColumns: ["medicine_id"]
           },
         ]
+      }
+      prescriptions_data: {
+        Row: {
+          created_at: string | null
+          date: string
+          doctor: string
+          id: string
+          image_url: string | null
+          notes: string | null
+          patient: string
+          prescription_id: string
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          date: string
+          doctor: string
+          id?: string
+          image_url?: string | null
+          notes?: string | null
+          patient: string
+          prescription_id: string
+          status: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          doctor?: string
+          id?: string
+          image_url?: string | null
+          notes?: string | null
+          patient?: string
+          prescription_id?: string
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       reports: {
         Row: {
