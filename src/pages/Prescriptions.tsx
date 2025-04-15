@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import Layout from "@/components/Layout";
 import { 
@@ -13,8 +12,10 @@ import {
   Filter,
   Calendar,
   FilePlus,
-  User
+  User,
+  PlusIcon
 } from "lucide-react";
+import { Pill } from "@/components/Pill";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -75,14 +76,13 @@ import { useForm } from "react-hook-form";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
-// Sample prescriptions data
 const initialPrescriptions = [
   {
     id: "PRES-1001",
     patient: "Amit Kumar",
     doctor: "Dr. Rajesh Sharma",
     date: "2025-04-10",
-    status: "pending", // pending, completed, rejected
+    status: "pending",
     items: [
       { name: "Paracetamol 500mg", dosage: "1 tablet three times a day after meals", duration: "5 days" },
       { name: "Cetirizine 10mg", dosage: "1 tablet at night", duration: "3 days" },
@@ -169,7 +169,6 @@ const Prescriptions: React.FC = () => {
   const [selectedPrescription, setSelectedPrescription] = useState<any>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
-  // Create form
   const form = useForm<PrescriptionForm>({
     defaultValues: {
       patient: "",
@@ -179,7 +178,6 @@ const Prescriptions: React.FC = () => {
     },
   });
 
-  // Filter prescriptions
   const filteredPrescriptions = prescriptions.filter((prescription) => {
     const matchesSearch = 
       prescription.patient.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -191,11 +189,9 @@ const Prescriptions: React.FC = () => {
     return matchesSearch && matchesStatus;
   });
 
-  // Handle form submit
   const onSubmit = (data: PrescriptionForm) => {
     const imageUrl = imagePreview;
     
-    // Create new prescription object
     const newPrescription = {
       id: `PRES-${1000 + prescriptions.length + 1}`,
       patient: data.patient,
@@ -207,10 +203,8 @@ const Prescriptions: React.FC = () => {
       imageUrl: imageUrl,
     };
     
-    // Add to prescriptions
     setPrescriptions([newPrescription, ...prescriptions]);
     
-    // Reset form and close dialog
     setShowAddDialog(false);
     setImagePreview(null);
     form.reset({
@@ -223,7 +217,6 @@ const Prescriptions: React.FC = () => {
     toast.success("Prescription added successfully");
   };
 
-  // Handle image upload
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -235,13 +228,11 @@ const Prescriptions: React.FC = () => {
     }
   };
 
-  // Handle add new item row in the form
   const addItemRow = () => {
     const currentItems = form.getValues().items;
     form.setValue("items", [...currentItems, { name: "", dosage: "", duration: "" }]);
   };
 
-  // Handle remove item row from the form
   const removeItemRow = (index: number) => {
     const currentItems = form.getValues().items;
     if (currentItems.length > 1) {
@@ -252,13 +243,11 @@ const Prescriptions: React.FC = () => {
     }
   };
 
-  // View prescription details
   const viewPrescription = (prescription: any) => {
     setSelectedPrescription(prescription);
     setShowViewDialog(true);
   };
 
-  // Update prescription status
   const updateStatus = (id: string, status: string) => {
     setPrescriptions(
       prescriptions.map((p) =>
@@ -266,7 +255,6 @@ const Prescriptions: React.FC = () => {
       )
     );
     
-    // Close dialog if open
     if (selectedPrescription?.id === id) {
       setSelectedPrescription({
         ...selectedPrescription,
@@ -277,12 +265,10 @@ const Prescriptions: React.FC = () => {
     toast.success(`Prescription ${status === "completed" ? "approved" : "rejected"}`);
   };
 
-  // Show different views based on user role
   const isAdmin = user?.role === "admin";
   const isStaff = user?.role === "staff";
   const isCustomer = user?.role === "customer";
 
-  // Filtered prescriptions for customer
   const customerPrescriptions = isCustomer 
     ? filteredPrescriptions.filter(p => p.patient === "Amit Kumar") 
     : filteredPrescriptions;
@@ -591,7 +577,6 @@ const Prescriptions: React.FC = () => {
         </Tabs>
       </div>
 
-      {/* Add Prescription Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
         <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -739,7 +724,7 @@ const Prescriptions: React.FC = () => {
                     size="sm"
                     onClick={addItemRow}
                   >
-                    <Plus className="h-4 w-4 mr-1" />
+                    <PlusIcon className="h-4 w-4 mr-1" />
                     Add Medicine
                   </Button>
                 </div>
@@ -783,7 +768,6 @@ const Prescriptions: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* View Prescription Dialog */}
       <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
         <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           {selectedPrescription && (

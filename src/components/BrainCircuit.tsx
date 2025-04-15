@@ -5,7 +5,7 @@ interface BrainCircuitProps {
   className?: string;
 }
 
-const BrainCircuit: React.FC<BrainCircuitProps> = ({ className }) => (
+export const BrainCircuit: React.FC<BrainCircuitProps> = ({ className }) => (
   <svg 
     xmlns="http://www.w3.org/2000/svg" 
     width="24" 

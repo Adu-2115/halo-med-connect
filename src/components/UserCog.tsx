@@ -5,7 +5,7 @@ interface UserCogProps {
   className?: string;
 }
 
-const UserCog: React.FC<UserCogProps> = ({ className }) => (
+export const UserCog: React.FC<UserCogProps> = ({ className }) => (
   <svg 
     xmlns="http://www.w3.org/2000/svg" 
     width="24" 

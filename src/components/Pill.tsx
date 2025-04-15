@@ -5,7 +5,7 @@ interface PillProps {
   className?: string;
 }
 
-const Pill: React.FC<PillProps> = ({ className }) => (
+export const Pill: React.FC<PillProps> = ({ className }) => (
   <svg 
     xmlns="http://www.w3.org/2000/svg" 
     width="24" 
