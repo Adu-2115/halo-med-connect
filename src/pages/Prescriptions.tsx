@@ -123,7 +123,6 @@ const Prescriptions: React.FC = () => {
     },
   });
 
-  // Fetch prescriptions from Supabase
   const fetchPrescriptions = async () => {
     setIsLoading(true);
     try {
@@ -153,7 +152,6 @@ const Prescriptions: React.FC = () => {
             patient: prescription.patient,
             doctor: prescription.doctor,
             date: prescription.date,
-            // Ensure status is one of the valid enum values
             status: prescription.status as "pending" | "completed" | "rejected",
             notes: prescription.notes || "",
             imageUrl: prescription.image_url,
@@ -171,7 +169,6 @@ const Prescriptions: React.FC = () => {
     }
   };
 
-  // Load prescriptions on component mount
   useEffect(() => {
     fetchPrescriptions();
   }, []);
@@ -187,7 +184,6 @@ const Prescriptions: React.FC = () => {
     return matchesSearch && matchesStatus;
   });
 
-  // Upload image to Supabase Storage
   const uploadImage = async (file: File): Promise<string | null> => {
     try {
       const fileExt = file.name.split('.').pop();
@@ -214,10 +210,8 @@ const Prescriptions: React.FC = () => {
     }
   };
 
-  // Save prescription to Supabase
   const savePrescription = async (prescription: any, items: PrescriptionItem[]) => {
     try {
-      // Insert prescription
       const { data: prescriptionData, error: prescriptionError } = await supabase
         .from('prescriptions_data')
         .insert([prescription])
@@ -227,7 +221,6 @@ const Prescriptions: React.FC = () => {
         throw prescriptionError;
       }
 
-      // Insert prescription items
       const itemsWithPrescriptionId = items.map(item => ({
         ...item,
         prescription_id: prescription.prescription_id
@@ -248,7 +241,6 @@ const Prescriptions: React.FC = () => {
     }
   };
 
-  // Update prescription status in Supabase
   const updatePrescriptionStatus = async (prescriptionId: string, status: string) => {
     try {
       const { error } = await supabase
@@ -275,7 +267,6 @@ const Prescriptions: React.FC = () => {
         imageUrl = await uploadImage(data.imageFile[0]);
       }
       
-      // Generate a unique ID to prevent duplication errors
       const newPrescriptionId = `PRES-${Date.now().toString().slice(-6)}`;
       
       const newPrescription = {
@@ -283,20 +274,17 @@ const Prescriptions: React.FC = () => {
         patient: data.patient,
         doctor: data.doctor,
         date: new Date().toISOString().split('T')[0],
-        status: "pending" as const, // Explicitly cast as a literal type
+        status: "pending" as const,
         notes: data.notes,
         image_url: imageUrl,
       };
       
-      // Filter out empty items
       const validItems = data.items.filter(item => item.name.trim() !== "");
       
-      // Save prescription to Supabase
       await savePrescription(newPrescription, validItems);
       
       toast.success("Prescription added successfully");
       
-      // Reset form and close dialog
       setShowAddDialog(false);
       setImagePreview(null);
       form.reset({
@@ -306,7 +294,6 @@ const Prescriptions: React.FC = () => {
         items: [{ name: "", dosage: "", duration: "" }],
       });
       
-      // Refresh prescriptions
       fetchPrescriptions();
     } catch (error) {
       console.error('Error submitting prescription:', error);
@@ -349,7 +336,6 @@ const Prescriptions: React.FC = () => {
     try {
       await updatePrescriptionStatus(id, newStatus);
       
-      // Update local state
       setPrescriptions(
         prescriptions.map((p) =>
           p.prescription_id === id ? { ...p, status: newStatus } : p
@@ -378,14 +364,12 @@ const Prescriptions: React.FC = () => {
     ? filteredPrescriptions.filter(p => p.patient === "Amit Kumar") 
     : filteredPrescriptions;
 
-  // Create storage bucket for prescriptions if it doesn't exist
   useEffect(() => {
     const createStorageBucket = async () => {
       try {
         const { data, error } = await supabase.storage.getBucket('prescriptions');
         
         if (error && error.message.includes('does not exist')) {
-          // Bucket doesn't exist, create it
           await supabase.storage.createBucket('prescriptions', {
             public: true
           });
@@ -1027,3 +1011,13 @@ const Prescriptions: React.FC = () => {
                     </p>
                   </div>
                 )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </Layout>
+  );
+};
+
+export default Prescriptions;
