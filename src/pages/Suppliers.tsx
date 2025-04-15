@@ -17,6 +17,8 @@ import {
   CheckCircle,
   XCircle
 } from "lucide-react";
+import User from "@/components/User"; // Import the User component
+import Pill from "@/components/Pill"; // Import the Pill component
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -202,6 +204,7 @@ interface SupplierForm {
   address: string;
   categories: string[];
   status: string;
+  rating?: number; // Add the rating property to fix the build error
 }
 
 // Form for adding new order
