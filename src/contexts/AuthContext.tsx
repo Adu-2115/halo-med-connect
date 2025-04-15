@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from "react";
 
 // Define user roles
@@ -26,28 +25,28 @@ interface AuthContextType {
 // Create auth context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Demo users for authentication
-const demoUsers = [
+// Actual users for authentication
+const users = [
   {
     id: "admin-1",
-    name: "Rajesh Sharma",
-    email: "rajesh.sharma@halomed.com",
+    name: "Admin User",
+    email: "admin@halomed.com",
     password: "admin123",
     role: "admin" as UserRole,
     avatar: "https://images.unsplash.com/photo-1566753323558-f4e0952af115?q=80&w=100&h=100&auto=format&fit=crop"
   },
   {
     id: "staff-1",
-    name: "Priya Patel",
-    email: "priya.patel@halomed.com",
+    name: "Staff User",
+    email: "staff@halomed.com",
     password: "staff123",
     role: "staff" as UserRole,
     avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=100&h=100&auto=format&fit=crop"
   },
   {
     id: "customer-1",
-    name: "Amit Kumar",
-    email: "amit.kumar@gmail.com",
+    name: "Customer User",
+    email: "customer@halomed.com",
     password: "customer123",
     role: "customer" as UserRole,
     avatar: "https://images.unsplash.com/photo-1599566150163-29194dcaad36?q=80&w=100&h=100&auto=format&fit=crop"
@@ -83,7 +82,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await new Promise(resolve => setTimeout(resolve, 1000));
     
     // Find matching user
-    const matchedUser = demoUsers.find(
+    const matchedUser = users.find(
       (u) => u.email.toLowerCase() === email.toLowerCase() && 
              u.password === password && 
              u.role === role
@@ -130,3 +129,5 @@ export const useAuth = () => {
   }
   return context;
 };
+
+export { AuthContext };
