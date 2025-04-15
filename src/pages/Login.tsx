@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Check, AlertCircle, Capsule, ShieldCheck } from "lucide-react";
+import { Check, AlertCircle, PillIcon, ShieldCheck } from "lucide-react";
 import { useAuth, UserRole } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,7 +58,7 @@ const Login: React.FC = () => {
       <div className="w-full max-w-md animate-fade-in">
         <div className="flex justify-center mb-6">
           <div className="flex items-center gap-2">
-            <Capsule className="h-8 w-8 text-halomed-500" />
+            <PillIcon className="h-8 w-8 text-halomed-500" />
             <h1 className="text-3xl font-bold text-halomed-700">HaloMed</h1>
           </div>
         </div>

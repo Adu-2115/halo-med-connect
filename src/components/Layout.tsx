@@ -4,19 +4,19 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { 
   LayoutDashboard, 
-  Package, 
+  Package2, 
   ShoppingCart, 
   FileText, 
   Truck, 
   BarChart3, 
-  BrainCircuit, 
+  Brain, 
   ChevronLeft, 
   Menu, 
   LogOut,
-  User,
+  UserCircle,
   Settings,
   Bell,
-  Capsule
+  PillIcon
 } from "lucide-react";
 import { 
   Dialog, 
@@ -63,7 +63,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     },
     {
       title: "Inventory",
-      icon: <Package className="h-5 w-5" />,
+      icon: <Package2 className="h-5 w-5" />,
       path: "/inventory",
       roles: ["admin", "staff"],
     },
@@ -93,7 +93,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     },
     {
       title: "Analytics",
-      icon: <BrainCircuit className="h-5 w-5" />,
+      icon: <Brain className="h-5 w-5" />,
       path: "/analytics",
       roles: ["admin"],
     },
@@ -124,7 +124,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <Menu className="h-5 w-5" />
           </Button>
           <div className="flex items-center ml-2">
-            <Capsule className="h-6 w-6 text-halomed-500 mr-2" />
+            <PillIcon className="h-6 w-6 text-halomed-500 mr-2" />
             <span className="font-bold text-xl text-halomed-700">HaloMed</span>
           </div>
         </div>
@@ -151,7 +151,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       >
         <div className="flex items-center justify-between p-4 border-b">
           <div className="flex items-center">
-            <Capsule className="h-6 w-6 text-halomed-500 mr-2" />
+            <PillIcon className="h-6 w-6 text-halomed-500 mr-2" />
             <span className="font-bold text-xl text-halomed-700">HaloMed</span>
           </div>
           <Button 
@@ -288,7 +288,7 @@ const UserDropdown: React.FC<{
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem>
-            <User className="mr-2 h-4 w-4" />
+            <UserCircle className="mr-2 h-4 w-4" />
             <span>Profile</span>
           </DropdownMenuItem>
           <DropdownMenuItem>
