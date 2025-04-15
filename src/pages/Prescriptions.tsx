@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import { 
@@ -154,10 +153,11 @@ const Prescriptions: React.FC = () => {
             patient: prescription.patient,
             doctor: prescription.doctor,
             date: prescription.date,
-            status: prescription.status,
-            notes: prescription.notes,
+            // Ensure status is one of the valid enum values
+            status: prescription.status as "pending" | "completed" | "rejected",
+            notes: prescription.notes || "",
             imageUrl: prescription.image_url,
-            items: itemsData
+            items: itemsData || []
           };
         })
       );
@@ -275,14 +275,15 @@ const Prescriptions: React.FC = () => {
         imageUrl = await uploadImage(data.imageFile[0]);
       }
       
-      const newPrescriptionId = `PRES-${1000 + prescriptions.length + 1}`;
+      // Generate a unique ID to prevent duplication errors
+      const newPrescriptionId = `PRES-${Date.now().toString().slice(-6)}`;
       
       const newPrescription = {
         prescription_id: newPrescriptionId,
         patient: data.patient,
         doctor: data.doctor,
         date: new Date().toISOString().split('T')[0],
-        status: "pending",
+        status: "pending" as const, // Explicitly cast as a literal type
         notes: data.notes,
         image_url: imageUrl,
       };
@@ -344,25 +345,25 @@ const Prescriptions: React.FC = () => {
     setShowViewDialog(true);
   };
 
-  const updateStatus = async (id: string, status: string) => {
+  const updateStatus = async (id: string, newStatus: "pending" | "completed" | "rejected") => {
     try {
-      await updatePrescriptionStatus(id, status);
+      await updatePrescriptionStatus(id, newStatus);
       
       // Update local state
       setPrescriptions(
         prescriptions.map((p) =>
-          p.prescription_id === id ? { ...p, status: status as "pending" | "completed" | "rejected" } : p
+          p.prescription_id === id ? { ...p, status: newStatus } : p
         )
       );
       
       if (selectedPrescription?.prescription_id === id) {
         setSelectedPrescription({
           ...selectedPrescription,
-          status: status as "pending" | "completed" | "rejected",
+          status: newStatus
         });
       }
       
-      toast.success(`Prescription ${status === "completed" ? "approved" : "rejected"}`);
+      toast.success(`Prescription ${newStatus === "completed" ? "approved" : "rejected"}`);
     } catch (error) {
       console.error('Error updating status:', error);
       toast.error('Failed to update prescription status');
@@ -380,13 +381,17 @@ const Prescriptions: React.FC = () => {
   // Create storage bucket for prescriptions if it doesn't exist
   useEffect(() => {
     const createStorageBucket = async () => {
-      const { data, error } = await supabase.storage.getBucket('prescriptions');
-      
-      if (error && error.message.includes('does not exist')) {
-        // Bucket doesn't exist, create it
-        await supabase.storage.createBucket('prescriptions', {
-          public: true
-        });
+      try {
+        const { data, error } = await supabase.storage.getBucket('prescriptions');
+        
+        if (error && error.message.includes('does not exist')) {
+          // Bucket doesn't exist, create it
+          await supabase.storage.createBucket('prescriptions', {
+            public: true
+          });
+        }
+      } catch (error) {
+        console.error('Error checking/creating storage bucket:', error);
       }
     };
     
@@ -991,13 +996,21 @@ const Prescriptions: React.FC = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {selectedPrescription.items.map((item: any, index: number) => (
-                          <TableRow key={index}>
-                            <TableCell className="font-medium">{item.name}</TableCell>
-                            <TableCell>{item.dosage}</TableCell>
-                            <TableCell>{item.duration}</TableCell>
+                        {selectedPrescription.items.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={3} className="text-center py-4 text-muted-foreground">
+                              No medications listed
+                            </TableCell>
                           </TableRow>
-                        ))}
+                        ) : (
+                          selectedPrescription.items.map((item: any, index: number) => (
+                            <TableRow key={index}>
+                              <TableCell className="font-medium">{item.name}</TableCell>
+                              <TableCell>{item.dosage}</TableCell>
+                              <TableCell>{item.duration}</TableCell>
+                            </TableRow>
+                          ))
+                        )}
                       </TableBody>
                     </Table>
                   </div>
@@ -1014,38 +1027,3 @@ const Prescriptions: React.FC = () => {
                     </p>
                   </div>
                 )}
-                
-                {(isAdmin || isStaff) && selectedPrescription.status === "pending" && (
-                  <div className="flex gap-3 justify-end">
-                    <Button
-                      variant="outline"
-                      className="text-red-600 border-red-200 hover:bg-red-50"
-                      onClick={() => {
-                        updateStatus(selectedPrescription.prescription_id, "rejected");
-                      }}
-                    >
-                      <X className="mr-2 h-4 w-4" />
-                      Reject
-                    </Button>
-                    
-                    <Button
-                      className="bg-green-600 hover:bg-green-700"
-                      onClick={() => {
-                        updateStatus(selectedPrescription.prescription_id, "completed");
-                      }}
-                    >
-                      <Check className="mr-2 h-4 w-4" />
-                      Approve & Process
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
-    </Layout>
-  );
-};
-
-export default Prescriptions;
