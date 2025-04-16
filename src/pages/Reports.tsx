@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+
+import React, { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import { 
   Download,
@@ -8,12 +9,15 @@ import {
   ChevronDown,
   Plus,
   Edit,
-  Trash2
+  Trash2,
+  LineChart,
+  BarChart,
+  PieChart
 } from "lucide-react";
-import Package from "@/components/Package"; // Import our custom Package component
-import Truck from "@/components/Truck"; // Import our custom Truck component
-import Clock from "@/components/Clock"; // Import our custom Clock component
-import BrainCircuit from "@/components/BrainCircuit"; // Import our custom BrainCircuit component
+import Package from "@/components/Package";
+import Truck from "@/components/Truck";
+import Clock from "@/components/Clock";
+import BrainCircuit from "@/components/BrainCircuit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -47,59 +51,177 @@ import { Calendar as CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { DayPicker } from "react-day-picker";
+import { supabase } from "@/integrations/supabase/client";
+import NestedQueryButton from "@/components/ui/nested-query-button";
+import { where, select, join, groupBy, orderBy } from "@/utils/nestedQueries";
+import { toast } from "sonner";
 
 const Reports: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [date, setDate] = useState<Date | undefined>(new Date());
+  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [reportsData, setReportsData] = useState<any[]>([]);
+  const [isLoadingReports, setIsLoadingReports] = useState(true);
+  const [isLoadingQueryResults, setIsLoadingQueryResults] = useState(false);
+  const [queryResults, setQueryResults] = useState<any[]>([]);
 
-  // Sample data for demonstration
-  const reportsData = [
-    {
-      id: "RPT-001",
-      title: "Monthly Sales Report",
-      description: "Detailed sales analysis for the month of March 2024",
-      category: "Sales",
-      dateGenerated: "2024-03-31",
-      status: "completed",
-    },
-    {
-      id: "RPT-002",
-      title: "Inventory Status Report",
-      description: "Current stock levels and reorder points",
-      category: "Inventory",
-      dateGenerated: "2024-04-05",
-      status: "completed",
-    },
-    {
-      id: "RPT-003",
-      title: "Supplier Performance Report",
-      description: "Evaluation of supplier delivery times and product quality",
-      category: "Suppliers",
-      dateGenerated: "2024-04-10",
-      status: "pending",
-    },
-    {
-      id: "RPT-004",
-      title: "Customer Feedback Analysis",
-      description: "Summary of customer reviews and ratings",
-      category: "Customer Service",
-      dateGenerated: "2024-04-15",
-      status: "completed",
-    },
-    {
-      id: "RPT-005",
-      title: "Financial Performance Report",
-      description: "Overview of revenue, expenses, and profit margins",
-      category: "Finance",
-      dateGenerated: "2024-04-20",
-      status: "pending",
-    },
-  ];
+  // Fetch reports data from Supabase
+  useEffect(() => {
+    async function fetchReports() {
+      setIsLoadingReports(true);
+      try {
+        const { data, error } = await supabase
+          .from('reports')
+          .select('*');
+        
+        if (error) {
+          console.error("Error fetching reports:", error);
+          toast.error("Failed to load reports");
+          setReportsData([]);
+        } else {
+          // Transform the data to match our expected format
+          const formattedData = data.map(report => ({
+            id: `RPT-${report.report_id.toString().padStart(3, '0')}`,
+            title: report.report_type || "Untitled Report",
+            description: report.content || "No description available",
+            category: report.report_type || "General",
+            dateGenerated: report.report_date || new Date().toISOString().split('T')[0],
+            status: "completed",
+            generatedBy: report.generated_by || "System"
+          }));
+          
+          setReportsData(formattedData);
+        }
+      } catch (error) {
+        console.error("Error in reports fetch:", error);
+        toast.error("An error occurred while loading reports");
+        setReportsData([]);
+      } finally {
+        setIsLoadingReports(false);
+      }
+    }
 
-  // Filter reports based on search query
-  const filteredReports = reportsData.filter((report) =>
-    report.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+    fetchReports();
+  }, []);
+
+  // Sample nested query executions
+  const executeInventoryAnalysis = async () => {
+    setIsLoadingQueryResults(true);
+    try {
+      // Fetch medicines and inventorylogs
+      const { data: medicines, error: medicinesError } = await supabase
+        .from('medicines')
+        .select('*');
+      
+      const { data: logs, error: logsError } = await supabase
+        .from('inventorylogs')
+        .select('*');
+        
+      if (medicinesError || logsError) {
+        throw new Error("Error fetching data");
+      }
+      
+      // Run nested query on client-side
+      const results = join(
+        medicines || [],
+        logs || [],
+        'medicine_id',
+        'medicine_id',
+        (medicine, log) => ({
+          medicineName: medicine.name,
+          category: medicine.category,
+          stockQuantity: medicine.stock_quantity,
+          lastChange: log ? {
+            date: log.log_date,
+            quantity: log.quantity_changed,
+            changeType: log.change_type
+          } : null
+        })
+      );
+      
+      // Filter results to only show items with recent changes
+      const filteredResults = where(results, item => item.lastChange !== null);
+      
+      setQueryResults(filteredResults);
+      toast.success("Inventory analysis complete");
+    } catch (error) {
+      console.error("Nested query error:", error);
+      toast.error("Failed to run inventory analysis");
+    } finally {
+      setIsLoadingQueryResults(false);
+    }
+  };
+
+  const executeCategoryAnalysis = async () => {
+    setIsLoadingQueryResults(true);
+    try {
+      // Fetch medicines
+      const { data: medicines, error: medicinesError } = await supabase
+        .from('medicines')
+        .select('*');
+      
+      if (medicinesError) {
+        throw new Error("Error fetching medicine data");
+      }
+      
+      // Group by category and count items
+      const results = groupBy(medicines || [], 'category', (items) => ({
+        count: items.length,
+        totalStock: items.reduce((sum, item) => sum + (item.stock_quantity || 0), 0),
+        averagePrice: items.reduce((sum, item) => sum + (item.price || 0), 0) / items.length
+      }));
+      
+      setQueryResults(results);
+      toast.success("Category analysis complete");
+    } catch (error) {
+      console.error("Nested query error:", error);
+      toast.error("Failed to run category analysis");
+    } finally {
+      setIsLoadingQueryResults(false);
+    }
+  };
+
+  const executeLowStockAnalysis = async () => {
+    setIsLoadingQueryResults(true);
+    try {
+      // Fetch medicines
+      const { data: medicines, error: medicinesError } = await supabase
+        .from('medicines')
+        .select('*');
+      
+      if (medicinesError) {
+        throw new Error("Error fetching medicine data");
+      }
+      
+      // Filter low stock items and sort by quantity
+      const lowStockItems = where(medicines || [], item => (item.stock_quantity || 0) < 30);
+      const results = orderBy(lowStockItems, 'stock_quantity', 'asc');
+      
+      // Select only needed fields
+      const filteredResults = select(results, ['medicine_id', 'name', 'category', 'stock_quantity', 'price']);
+      
+      setQueryResults(filteredResults);
+      toast.success("Low stock analysis complete");
+    } catch (error) {
+      console.error("Nested query error:", error);
+      toast.error("Failed to run low stock analysis");
+    } finally {
+      setIsLoadingQueryResults(false);
+    }
+  };
+
+  // Filter reports based on search query and category
+  const filteredReports = reportsData.filter((report) => {
+    const matchesSearch = report.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          report.description.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesCategory = categoryFilter === "All" || report.category === categoryFilter;
+    
+    return matchesSearch && matchesCategory;
+  });
+
+  // Extract unique categories for filter dropdown
+  const reportCategories = ["All", ...Array.from(new Set(reportsData.map(report => report.category)))];
 
   return (
     <Layout>
@@ -122,6 +244,116 @@ const Reports: React.FC = () => {
             </Button>
           </div>
         </div>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Inventory Analysis
+              </CardTitle>
+              <Package className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col gap-2">
+                <p className="text-sm text-muted-foreground">
+                  Run advanced analysis on inventory data
+                </p>
+                <NestedQueryButton 
+                  onExecute={executeInventoryAnalysis} 
+                  isLoading={isLoadingQueryResults}
+                  label="Run Analysis"
+                  icon={<LineChart className="h-4 w-4" />}
+                />
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Category Analysis
+              </CardTitle>
+              <PieChart className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col gap-2">
+                <p className="text-sm text-muted-foreground">
+                  Group and analyze products by category
+                </p>
+                <NestedQueryButton 
+                  onExecute={executeCategoryAnalysis} 
+                  isLoading={isLoadingQueryResults}
+                  label="Run Analysis"
+                  icon={<PieChart className="h-4 w-4" />}
+                />
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Low Stock Analysis
+              </CardTitle>
+              <BarChart className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col gap-2">
+                <p className="text-sm text-muted-foreground">
+                  Identify products with low stock levels
+                </p>
+                <NestedQueryButton 
+                  onExecute={executeLowStockAnalysis} 
+                  isLoading={isLoadingQueryResults}
+                  label="Run Analysis"
+                  icon={<BarChart className="h-4 w-4" />}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {queryResults.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Query Results</CardTitle>
+              <CardDescription>
+                Results from your last analysis
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      {Object.keys(queryResults[0]).map((key) => (
+                        <TableHead key={key}>{key}</TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {queryResults.slice(0, 10).map((result, index) => (
+                      <TableRow key={index}>
+                        {Object.values(result).map((value: any, i) => (
+                          <TableCell key={i}>
+                            {typeof value === 'object' && value !== null 
+                              ? JSON.stringify(value)
+                              : String(value === null ? '-' : value)}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {queryResults.length > 10 && (
+                  <div className="px-4 py-2 text-sm text-muted-foreground">
+                    Showing 10 of {queryResults.length} results
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader className="pb-3">
@@ -165,16 +397,19 @@ const Reports: React.FC = () => {
                   />
                 </PopoverContent>
               </Popover>
-              <Select>
+              <Select
+                value={categoryFilter}
+                onValueChange={setCategoryFilter}
+              >
                 <SelectTrigger className="w-full sm:w-[180px]">
                   <SelectValue placeholder="Filter by category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="sales">Sales</SelectItem>
-                  <SelectItem value="inventory">Inventory</SelectItem>
-                  <SelectItem value="suppliers">Suppliers</SelectItem>
-                  <SelectItem value="customerService">Customer Service</SelectItem>
-                  <SelectItem value="finance">Finance</SelectItem>
+                  {reportCategories.map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {category}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -193,7 +428,13 @@ const Reports: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredReports.length === 0 ? (
+                  {isLoadingReports ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center h-24">
+                        Loading reports...
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredReports.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center h-24">
                         No reports found matching your criteria
@@ -206,7 +447,15 @@ const Reports: React.FC = () => {
                         <TableCell>{report.title}</TableCell>
                         <TableCell>{report.category}</TableCell>
                         <TableCell>{report.dateGenerated}</TableCell>
-                        <TableCell>{report.status}</TableCell>
+                        <TableCell>
+                          <span className={`px-2 py-1 rounded-full text-xs ${
+                            report.status === 'completed' 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-amber-100 text-amber-800'
+                          }`}>
+                            {report.status}
+                          </span>
+                        </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Button variant="ghost" size="icon">
