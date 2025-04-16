@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import Layout from "@/components/Layout";
@@ -13,6 +12,12 @@ import {
   ArrowDownRight,
   Users,
   Activity,
+  Filter,
+  ChevronDown,
+  BarChart3,
+  UserCheck,
+  ShoppingCart,
+  Search,
 } from "lucide-react";
 import {
   Card,
@@ -20,12 +25,17 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import NestedQueryButton from "@/components/ui/nested-query-button";
+import { useInventoryStockQuery, useSalesAnalyticsQuery, useCustomerSegmentationQuery } from "@/hooks/useNestedQuery";
 
-// Sample data for charts
 const salesData = [
   { name: "Jan", amount: 24000 },
   { name: "Feb", amount: 18000 },
@@ -45,10 +55,232 @@ const inventoryData = [
 
 const COLORS = ["#0891B2", "#22D3EE", "#7DD3FC", "#BAE6FD", "#E0F2FE"];
 
-// Admin Dashboard
 const AdminDashboard = () => {
+  const [showQueryButtons, setShowQueryButtons] = useState(false);
+  
+  const sampleInventory = [
+    { id: 1, name: 'Paracetamol', stock_quantity: 5, category: 'Pain Relief', expiry_date: '2025-06-30' },
+    { id: 2, name: 'Amoxicillin', stock_quantity: 15, category: 'Antibiotics', expiry_date: '2025-05-15' },
+    { id: 3, name: 'Lisinopril', stock_quantity: 8, category: 'Cardiac', expiry_date: '2025-07-20' },
+    { id: 4, name: 'Metformin', stock_quantity: 3, category: 'Diabetes', expiry_date: '2025-04-10' },
+    { id: 5, name: 'Simvastatin', stock_quantity: 12, category: 'Cholesterol', expiry_date: '2026-01-15' },
+  ];
+  
+  const sampleSales = [
+    { id: 1, product_id: 1, product_name: 'Paracetamol', quantity: 10, price: 5, sale_date: '2025-04-01' },
+    { id: 2, product_id: 2, product_name: 'Amoxicillin', quantity: 5, price: 12, sale_date: '2025-04-05' },
+    { id: 3, product_id: 3, product_name: 'Lisinopril', quantity: 8, price: 15, sale_date: '2025-04-10' },
+    { id: 4, product_id: 1, product_name: 'Paracetamol', quantity: 15, price: 5, sale_date: '2025-04-15' },
+    { id: 5, product_id: 4, product_name: 'Metformin', quantity: 3, price: 20, sale_date: '2025-04-20' },
+    { id: 6, product_id: 5, product_name: 'Simvastatin', quantity: 6, price: 25, sale_date: '2025-03-10' },
+    { id: 7, product_id: 2, product_name: 'Amoxicillin', quantity: 4, price: 12, sale_date: '2025-03-15' },
+  ];
+  
+  const sampleCustomers = [
+    { id: 1, name: 'Raj Kumar', purchases: [{ amount: 5000 }, { amount: 3000 }, { amount: 2500 }] },
+    { id: 2, name: 'Priya Shah', purchases: [{ amount: 12000 }, { amount: 5000 }] },
+    { id: 3, name: 'Amit Patel', purchases: [{ amount: 1500 }, { amount: 1200 }, { amount: 800 }] },
+    { id: 4, name: 'Neha Singh', purchases: [{ amount: 9000 }, { amount: 7500 }] },
+    { id: 5, name: 'Vikram Mehra', purchases: [{ amount: 4500 }, { amount: 2000 }, { amount: 3000 }] },
+  ];
+  
+  const {
+    data: inventoryQueryData,
+    isLoading: inventoryLoading,
+    findLowStock,
+    findExpiringItems
+  } = useInventoryStockQuery(sampleInventory);
+  
+  const {
+    data: salesQueryData,
+    isLoading: salesLoading,
+    findTopSellingItems,
+    analyzeMonthlySales
+  } = useSalesAnalyticsQuery(sampleSales);
+  
+  const {
+    data: customerQueryData,
+    isLoading: customerLoading,
+    segmentByPurchaseValue
+  } = useCustomerSegmentationQuery(sampleCustomers);
+  
   return (
     <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-medium">Dashboard Overview</h3>
+        <Button 
+          variant="outline" 
+          onClick={() => setShowQueryButtons(!showQueryButtons)}
+          className="flex items-center gap-2"
+        >
+          <Filter className="h-4 w-4" />
+          Advanced Queries
+          <ChevronDown className="h-4 w-4" />
+        </Button>
+      </div>
+      
+      {showQueryButtons && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium">Inventory Queries</h4>
+            <div className="flex flex-col gap-2">
+              <NestedQueryButton
+                onExecute={findLowStock}
+                isLoading={inventoryLoading}
+                label="Find Low Stock Items"
+                icon={<AlertCircle className="h-4 w-4" />}
+                variant="outline"
+              />
+              <NestedQueryButton
+                onExecute={findExpiringItems}
+                isLoading={inventoryLoading}
+                label="Find Expiring Items"
+                icon={<Calendar className="h-4 w-4" />}
+                variant="outline"
+              />
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium">Sales Queries</h4>
+            <div className="flex flex-col gap-2">
+              <NestedQueryButton
+                onExecute={findTopSellingItems}
+                isLoading={salesLoading}
+                label="Top Selling Products"
+                icon={<BarChart3 className="h-4 w-4" />}
+                variant="outline"
+              />
+              <NestedQueryButton
+                onExecute={analyzeMonthlySales}
+                isLoading={salesLoading}
+                label="Monthly Sales Analysis"
+                icon={<IndianRupee className="h-4 w-4" />}
+                variant="outline"
+              />
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium">Customer Queries</h4>
+            <div className="flex flex-col gap-2">
+              <NestedQueryButton
+                onExecute={segmentByPurchaseValue}
+                isLoading={customerLoading}
+                label="Customer Segmentation"
+                icon={<UserCheck className="h-4 w-4" />}
+                variant="outline"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {(showQueryButtons && inventoryQueryData !== sampleInventory) && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Query Results</CardTitle>
+            <CardDescription>
+              {inventoryLoading ? "Processing query..." : "Showing results of the selected query"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-md border">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b bg-muted/50">
+                    {inventoryQueryData.length > 0 && Object.keys(inventoryQueryData[0]).map(key => (
+                      <th key={key} className="p-2 text-left font-medium">{key}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {inventoryQueryData.map((item, index) => (
+                    <tr key={index} className="border-b">
+                      {Object.values(item).map((value, i) => (
+                        <td key={i} className="p-2">
+                          {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      
+      {(showQueryButtons && salesQueryData !== sampleSales) && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Sales Query Results</CardTitle>
+            <CardDescription>
+              {salesLoading ? "Processing query..." : "Showing results of the sales query"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-md border">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b bg-muted/50">
+                    {salesQueryData.length > 0 && Object.keys(salesQueryData[0]).map(key => (
+                      <th key={key} className="p-2 text-left font-medium">{key}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {salesQueryData.map((item, index) => (
+                    <tr key={index} className="border-b">
+                      {Object.values(item).map((value, i) => (
+                        <td key={i} className="p-2">
+                          {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      
+      {(showQueryButtons && customerQueryData !== sampleCustomers) && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Customer Query Results</CardTitle>
+            <CardDescription>
+              {customerLoading ? "Processing query..." : "Showing results of the customer query"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-md border">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b bg-muted/50">
+                    {customerQueryData.length > 0 && Object.keys(customerQueryData[0]).map(key => (
+                      <th key={key} className="p-2 text-left font-medium">{key}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {customerQueryData.map((item, index) => (
+                    <tr key={index} className="border-b">
+                      {Object.values(item).map((value, i) => (
+                        <td key={i} className="p-2">
+                          {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <DashboardCard
           title="Total Inventory"
@@ -250,7 +482,6 @@ const AdminDashboard = () => {
   );
 };
 
-// Staff Dashboard
 const StaffDashboard = () => {
   return (
     <div className="space-y-6">
@@ -345,7 +576,7 @@ const StaffDashboard = () => {
                     <p className="text-sm text-muted-foreground">{customer.time} • {customer.items} items</p>
                   </div>
                   <div className="text-right">
-                    <p className="font-medium">{customer.total}</p>
+                    <p className="text-sm font-medium text-green-600">{customer.total}</p>
                   </div>
                 </div>
               ))}
@@ -357,7 +588,6 @@ const StaffDashboard = () => {
   );
 };
 
-// Customer Dashboard
 const CustomerDashboard = () => {
   return (
     <div className="space-y-6">
@@ -454,7 +684,6 @@ const CustomerDashboard = () => {
   );
 };
 
-// Card component for dashboard statistics
 const DashboardCard: React.FC<{
   title: string;
   value: string;
