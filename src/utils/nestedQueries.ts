@@ -33,7 +33,7 @@ export const join = <T, U, K extends keyof T, J extends keyof U>(
 ): any[] => {
   return leftData.map((leftItem) => {
     const rightItem = rightData.find(
-      (rightItem) => rightItem[rightKey] === leftItem[leftKey]
+      (rightItem) => String(rightItem[rightKey]) === String(leftItem[leftKey])
     );
     return select(leftItem, rightItem);
   });
