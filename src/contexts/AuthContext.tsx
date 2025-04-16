@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from "react";
 
 // Define user roles
@@ -30,7 +31,7 @@ const users = [
   {
     id: "admin-1",
     name: "Admin User",
-    email: "admin@halomed.com",
+    email: "PUKKU@halomed.com",
     password: "admin123",
     role: "admin" as UserRole,
     avatar: "https://images.unsplash.com/photo-1566753323558-f4e0952af115?q=80&w=100&h=100&auto=format&fit=crop"
@@ -38,7 +39,7 @@ const users = [
   {
     id: "staff-1",
     name: "Staff User",
-    email: "staff@halomed.com",
+    email: "RAJ@halomed.com",
     password: "staff123",
     role: "staff" as UserRole,
     avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=100&h=100&auto=format&fit=crop"
@@ -46,7 +47,7 @@ const users = [
   {
     id: "customer-1",
     name: "Customer User",
-    email: "customer@halomed.com",
+    email: "Ronaldo@halomed.com",
     password: "customer123",
     role: "customer" as UserRole,
     avatar: "https://images.unsplash.com/photo-1599566150163-29194dcaad36?q=80&w=100&h=100&auto=format&fit=crop"
