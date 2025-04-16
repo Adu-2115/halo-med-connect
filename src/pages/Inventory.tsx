@@ -1,5 +1,4 @@
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import { 
   Package, 
@@ -56,8 +55,8 @@ import {
 import { useForm } from "react-hook-form";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { supabase } from "@/integrations/supabase/client";
 
-// Sample inventory data
 const initialMedicines = [
   {
     id: "1",
@@ -171,7 +170,6 @@ const initialMedicines = [
   },
 ];
 
-// Categories for filtering
 const medicineCategories = [
   "All Categories",
   "Pain Relief",
@@ -183,7 +181,6 @@ const medicineCategories = [
   "Vitamins",
 ];
 
-// Form for adding/editing medicine
 interface MedicineForm {
   id?: string;
   name: string;
@@ -196,8 +193,33 @@ interface MedicineForm {
   description: string;
 }
 
+interface DbMedicine {
+  medicine_id: number;
+  name: string;
+  category: string;
+  stock_quantity: number;
+  price: number;
+  expiry_date: string;
+  manufacturer?: string;
+  batchNo?: string;
+  description?: string;
+}
+
+interface Medicine {
+  id: string;
+  name: string;
+  category: string;
+  manufacturer: string;
+  stock: number;
+  price: number;
+  expiry: string;
+  batchNo: string;
+  description: string;
+}
+
 const Inventory: React.FC = () => {
-  const [medicines, setMedicines] = useState(initialMedicines);
+  const [medicines, setMedicines] = useState<Medicine[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All Categories");
   const [sortColumn, setSortColumn] = useState<string | null>(null);
@@ -207,7 +229,45 @@ const Inventory: React.FC = () => {
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [medicineToDelete, setMedicineToDelete] = useState<string | null>(null);
 
-  // Setup react-hook-form
+  useEffect(() => {
+    async function fetchMedicines() {
+      setIsLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('medicines')
+          .select('*');
+        
+        if (error) {
+          console.error('Error fetching medicines:', error);
+          toast.error('Failed to load medicines');
+          setMedicines(initialMedicines);
+        } else if (data) {
+          const mappedMedicines: Medicine[] = data.map((dbMed: DbMedicine) => ({
+            id: dbMed.medicine_id.toString(),
+            name: dbMed.name,
+            category: dbMed.category || '',
+            manufacturer: dbMed.manufacturer || 'Unknown',
+            stock: dbMed.stock_quantity || 0,
+            price: dbMed.price,
+            expiry: dbMed.expiry_date || new Date().toISOString().substring(0, 10),
+            batchNo: dbMed.batchNo || `BT${Math.floor(Math.random() * 1000000)}`,
+            description: dbMed.description || '',
+          }));
+          setMedicines(mappedMedicines);
+          console.log('Medicines loaded from Supabase:', mappedMedicines);
+        }
+      } catch (err) {
+        console.error('Unexpected error:', err);
+        toast.error('An unexpected error occurred');
+        setMedicines(initialMedicines);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchMedicines();
+  }, []);
+
   const form = useForm<MedicineForm>({
     defaultValues: {
       name: "",
@@ -221,7 +281,6 @@ const Inventory: React.FC = () => {
     },
   });
 
-  // Filter and sort medicines
   const filteredMedicines = medicines
     .filter((medicine) => {
       const matchesSearch = medicine.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -249,7 +308,6 @@ const Inventory: React.FC = () => {
         : bValue - aValue;
     });
 
-  // Handle sorting
   const handleSort = (column: string) => {
     if (sortColumn === column) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
@@ -259,7 +317,6 @@ const Inventory: React.FC = () => {
     }
   };
 
-  // Open add medicine dialog
   const handleAdd = () => {
     form.reset({
       name: "",
@@ -275,8 +332,7 @@ const Inventory: React.FC = () => {
     setIsAddDialogOpen(true);
   };
 
-  // Open edit medicine dialog
-  const handleEdit = (medicine: MedicineForm) => {
+  const handleEdit = (medicine: Medicine) => {
     form.reset({
       ...medicine,
       expiry: new Date(medicine.expiry).toISOString().substring(0, 10),
@@ -285,43 +341,112 @@ const Inventory: React.FC = () => {
     setIsAddDialogOpen(true);
   };
 
-  // Open delete confirmation dialog
   const handleDeleteClick = (id: string) => {
     setMedicineToDelete(id);
     setIsConfirmDeleteOpen(true);
   };
 
-  // Confirm deletion
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (medicineToDelete) {
-      setMedicines(medicines.filter(m => m.id !== medicineToDelete));
-      toast.success("Medicine deleted successfully");
+      setIsLoading(true);
+      try {
+        const { error } = await supabase
+          .from('medicines')
+          .delete()
+          .eq('medicine_id', parseInt(medicineToDelete));
+        
+        if (error) {
+          console.error('Error deleting medicine:', error);
+          toast.error('Failed to delete medicine');
+        } else {
+          setMedicines(medicines.filter(m => m.id !== medicineToDelete));
+          toast.success("Medicine deleted successfully");
+        }
+      } catch (err) {
+        console.error('Unexpected error:', err);
+        toast.error('An unexpected error occurred');
+      } finally {
+        setIsLoading(false);
+      }
     }
     setIsConfirmDeleteOpen(false);
     setMedicineToDelete(null);
   };
 
-  // Submit form
-  const onSubmit = (data: MedicineForm) => {
-    if (editingMedicine) {
-      // Update existing medicine
-      setMedicines(
-        medicines.map((m) => (m.id === editingMedicine.id ? { ...data, id: m.id } : m))
-      );
-      toast.success("Medicine updated successfully");
-    } else {
-      // Add new medicine
-      const newMedicine = {
-        ...data,
-        id: `${medicines.length + 1}`,
-      };
-      setMedicines([...medicines, newMedicine]);
-      toast.success("Medicine added successfully");
+  const onSubmit = async (data: MedicineForm) => {
+    setIsLoading(true);
+    try {
+      if (editingMedicine) {
+        const { error } = await supabase
+          .from('medicines')
+          .update({
+            name: data.name,
+            category: data.category,
+            stock_quantity: data.stock,
+            price: data.price,
+            expiry_date: data.expiry
+          })
+          .eq('medicine_id', parseInt(editingMedicine.id));
+        
+        if (error) {
+          console.error('Error updating medicine:', error);
+          toast.error('Failed to update medicine');
+        } else {
+          setMedicines(
+            medicines.map((m) => (m.id === editingMedicine.id ? { 
+              ...m,
+              name: data.name,
+              category: data.category,
+              manufacturer: data.manufacturer,
+              stock: data.stock,
+              price: data.price,
+              expiry: data.expiry,
+              batchNo: data.batchNo,
+              description: data.description
+            } : m))
+          );
+          toast.success("Medicine updated successfully");
+        }
+      } else {
+        const { data: newData, error } = await supabase
+          .from('medicines')
+          .insert({
+            name: data.name,
+            category: data.category,
+            stock_quantity: data.stock,
+            price: data.price,
+            expiry_date: data.expiry
+          })
+          .select();
+        
+        if (error) {
+          console.error('Error adding medicine:', error);
+          toast.error('Failed to add medicine');
+        } else if (newData && newData.length > 0) {
+          const newMedicine: Medicine = {
+            id: newData[0].medicine_id.toString(),
+            name: data.name,
+            category: data.category,
+            manufacturer: data.manufacturer,
+            stock: data.stock,
+            price: data.price,
+            expiry: data.expiry,
+            batchNo: data.batchNo,
+            description: data.description
+          };
+          setMedicines([...medicines, newMedicine]);
+          toast.success("Medicine added successfully");
+        }
+      }
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      toast.error('An unexpected error occurred');
+    } finally {
+      setIsLoading(false);
+      setIsAddDialogOpen(false);
     }
-    setIsAddDialogOpen(false);
   };
 
-  // Count low stock items
   const lowStockCount = medicines.filter(m => m.stock <= 20).length;
   const expiringSoonCount = medicines.filter(m => {
     const expiryDate = new Date(m.expiry);
@@ -329,6 +454,10 @@ const Inventory: React.FC = () => {
     threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
     return expiryDate < threeMonthsFromNow;
   }).length;
+
+  const totalInventoryValue = medicines.reduce((total, medicine) => {
+    return total + (medicine.price * medicine.stock);
+  }, 0);
 
   return (
     <Layout>
@@ -346,7 +475,7 @@ const Inventory: React.FC = () => {
           </Button>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
@@ -386,6 +515,20 @@ const Inventory: React.FC = () => {
               <div className="text-2xl font-bold">{expiringSoonCount}</div>
               <p className="text-xs text-muted-foreground">
                 Items expiring within 3 months
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Total Inventory Value
+              </CardTitle>
+              <Package className="h-4 w-4 text-green-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">₹{totalInventoryValue.toLocaleString('en-IN')}</div>
+              <p className="text-xs text-muted-foreground">
+                Based on current stock and prices
               </p>
             </CardContent>
           </Card>
@@ -435,233 +578,86 @@ const Inventory: React.FC = () => {
             </div>
 
             <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[250px]">
-                      <Button 
-                        variant="ghost" 
-                        className="px-0 hover:bg-transparent font-medium"
-                        onClick={() => handleSort("name")}
-                      >
-                        Medicine Name
-                        {sortColumn === "name" && (
-                          <ArrowUpDown className="ml-2 h-4 w-4" />
-                        )}
-                      </Button>
-                    </TableHead>
-                    <TableHead>
-                      <Button 
-                        variant="ghost" 
-                        className="px-0 hover:bg-transparent font-medium"
-                        onClick={() => handleSort("category")}
-                      >
-                        Category
-                        {sortColumn === "category" && (
-                          <ArrowUpDown className="ml-2 h-4 w-4" />
-                        )}
-                      </Button>
-                    </TableHead>
-                    <TableHead>
-                      <Button 
-                        variant="ghost" 
-                        className="px-0 hover:bg-transparent font-medium"
-                        onClick={() => handleSort("stock")}
-                      >
-                        Stock
-                        {sortColumn === "stock" && (
-                          <ArrowUpDown className="ml-2 h-4 w-4" />
-                        )}
-                      </Button>
-                    </TableHead>
-                    <TableHead>
-                      <Button 
-                        variant="ghost" 
-                        className="px-0 hover:bg-transparent font-medium"
-                        onClick={() => handleSort("price")}
-                      >
-                        Price
-                        {sortColumn === "price" && (
-                          <ArrowUpDown className="ml-2 h-4 w-4" />
-                        )}
-                      </Button>
-                    </TableHead>
-                    <TableHead>
-                      <Button 
-                        variant="ghost" 
-                        className="px-0 hover:bg-transparent font-medium"
-                        onClick={() => handleSort("expiry")}
-                      >
-                        Expiry
-                        {sortColumn === "expiry" && (
-                          <ArrowUpDown className="ml-2 h-4 w-4" />
-                        )}
-                      </Button>
-                    </TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredMedicines.length === 0 ? (
+              {isLoading ? (
+                <div className="flex justify-center items-center h-64">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-halomed-500"></div>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center h-24">
-                        No medicines found matching your criteria
-                      </TableCell>
+                      <TableHead className="w-[250px]">
+                        <Button 
+                          variant="ghost" 
+                          className="px-0 hover:bg-transparent font-medium"
+                          onClick={() => handleSort("name")}
+                        >
+                          Medicine Name
+                          {sortColumn === "name" && (
+                            <ArrowUpDown className="ml-2 h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableHead>
+                      <TableHead>
+                        <Button 
+                          variant="ghost" 
+                          className="px-0 hover:bg-transparent font-medium"
+                          onClick={() => handleSort("category")}
+                        >
+                          Category
+                          {sortColumn === "category" && (
+                            <ArrowUpDown className="ml-2 h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableHead>
+                      <TableHead>
+                        <Button 
+                          variant="ghost" 
+                          className="px-0 hover:bg-transparent font-medium"
+                          onClick={() => handleSort("stock")}
+                        >
+                          Stock
+                          {sortColumn === "stock" && (
+                            <ArrowUpDown className="ml-2 h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableHead>
+                      <TableHead>
+                        <Button 
+                          variant="ghost" 
+                          className="px-0 hover:bg-transparent font-medium"
+                          onClick={() => handleSort("price")}
+                        >
+                          Price
+                          {sortColumn === "price" && (
+                            <ArrowUpDown className="ml-2 h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableHead>
+                      <TableHead>
+                        <Button 
+                          variant="ghost" 
+                          className="px-0 hover:bg-transparent font-medium"
+                          onClick={() => handleSort("expiry")}
+                        >
+                          Expiry
+                          {sortColumn === "expiry" && (
+                            <ArrowUpDown className="ml-2 h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
-                  ) : (
-                    filteredMedicines.map((medicine) => (
-                      <TableRow key={medicine.id}>
-                        <TableCell className="font-medium">
-                          <div>
-                            {medicine.name}
-                            <div className="text-xs text-muted-foreground mt-1">
-                              {medicine.manufacturer}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>{medicine.category}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center">
-                            {medicine.stock}
-                            {medicine.stock <= 20 && (
-                              <Badge variant="outline" className="ml-2 text-amber-500 border-amber-200 bg-amber-50">
-                                Low
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>₹{medicine.price.toFixed(2)}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center">
-                            {new Date(medicine.expiry).toLocaleDateString('en-IN')}
-                            {new Date(medicine.expiry) < new Date(new Date().setMonth(new Date().getMonth() + 3)) && (
-                              <Badge variant="outline" className="ml-2 text-red-500 border-red-200 bg-red-50">
-                                Soon
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEdit(medicine)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDeleteClick(medicine.id)}
-                              className="text-red-500 hover:text-red-600 hover:bg-red-50"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredMedicines.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center h-24">
+                          No medicines found matching your criteria
                         </TableCell>
                       </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="lowStock">
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[250px]">Medicine Name</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Stock</TableHead>
-                    <TableHead>Price</TableHead>
-                    <TableHead>Manufacturer</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {medicines.filter(m => m.stock <= 20).length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center h-24">
-                        No low stock medicines found
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    medicines
-                      .filter(m => m.stock <= 20)
-                      .map((medicine) => (
-                        <TableRow key={medicine.id}>
-                          <TableCell className="font-medium">
-                            <div>
-                              {medicine.name}
-                              <div className="text-xs text-muted-foreground mt-1">
-                                {medicine.batchNo}
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>{medicine.category}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="text-amber-500 border-amber-200 bg-amber-50">
-                              {medicine.stock} units
-                            </Badge>
-                          </TableCell>
-                          <TableCell>₹{medicine.price.toFixed(2)}</TableCell>
-                          <TableCell>{medicine.manufacturer}</TableCell>
-                          <TableCell>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleEdit(medicine)}
-                              className="text-halomed-500 border-halomed-200"
-                            >
-                              Update Stock
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="expiring">
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[250px]">Medicine Name</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Expiry Date</TableHead>
-                    <TableHead>Stock</TableHead>
-                    <TableHead>Batch No</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {medicines.filter(m => {
-                    const expiryDate = new Date(m.expiry);
-                    const threeMonthsFromNow = new Date();
-                    threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
-                    return expiryDate < threeMonthsFromNow;
-                  }).length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center h-24">
-                        No medicines expiring soon
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    medicines
-                      .filter(m => {
-                        const expiryDate = new Date(m.expiry);
-                        const threeMonthsFromNow = new Date();
-                        threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
-                        return expiryDate < threeMonthsFromNow;
-                      })
-                      .sort((a, b) => new Date(a.expiry).getTime() - new Date(b.expiry).getTime())
-                      .map((medicine) => (
+                    ) : (
+                      filteredMedicines.map((medicine) => (
                         <TableRow key={medicine.id}>
                           <TableCell className="font-medium">
                             <div>
@@ -673,42 +669,206 @@ const Inventory: React.FC = () => {
                           </TableCell>
                           <TableCell>{medicine.category}</TableCell>
                           <TableCell>
-                            <Badge variant="outline" className="text-red-500 border-red-200 bg-red-50">
-                              {new Date(medicine.expiry).toLocaleDateString('en-IN')}
-                            </Badge>
+                            <div className="flex items-center">
+                              {medicine.stock}
+                              {medicine.stock <= 20 && (
+                                <Badge variant="outline" className="ml-2 text-amber-500 border-amber-200 bg-amber-50">
+                                  Low
+                                </Badge>
+                              )}
+                            </div>
                           </TableCell>
-                          <TableCell>{medicine.stock} units</TableCell>
-                          <TableCell>{medicine.batchNo}</TableCell>
+                          <TableCell>₹{medicine.price.toFixed(2)}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center">
+                              {new Date(medicine.expiry).toLocaleDateString('en-IN')}
+                              {new Date(medicine.expiry) < new Date(new Date().setMonth(new Date().getMonth() + 3)) && (
+                                <Badge variant="outline" className="ml-2 text-red-500 border-red-200 bg-red-50">
+                                  Soon
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <Button
-                                variant="outline"
-                                size="sm"
+                                variant="ghost"
+                                size="icon"
                                 onClick={() => handleEdit(medicine)}
                               >
-                                Update
+                                <Edit className="h-4 w-4" />
                               </Button>
                               <Button
-                                variant="outline"
-                                size="sm"
+                                variant="ghost"
+                                size="icon"
                                 onClick={() => handleDeleteClick(medicine.id)}
-                                className="text-red-500 border-red-200"
+                                className="text-red-500 hover:text-red-600 hover:bg-red-50"
                               >
-                                Remove
+                                <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
                           </TableCell>
                         </TableRow>
                       ))
-                  )}
-                </TableBody>
-              </Table>
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="lowStock">
+            <div className="rounded-md border">
+              {isLoading ? (
+                <div className="flex justify-center items-center h-64">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-halomed-500"></div>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[250px]">Medicine Name</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Stock</TableHead>
+                      <TableHead>Price</TableHead>
+                      <TableHead>Manufacturer</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {medicines.filter(m => m.stock <= 20).length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center h-24">
+                          No low stock medicines found
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      medicines
+                        .filter(m => m.stock <= 20)
+                        .map((medicine) => (
+                          <TableRow key={medicine.id}>
+                            <TableCell className="font-medium">
+                              <div>
+                                {medicine.name}
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  {medicine.batchNo}
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>{medicine.category}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-amber-500 border-amber-200 bg-amber-50">
+                                {medicine.stock} units
+                              </Badge>
+                            </TableCell>
+                            <TableCell>₹{medicine.price.toFixed(2)}</TableCell>
+                            <TableCell>{medicine.manufacturer}</TableCell>
+                            <TableCell>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleEdit(medicine)}
+                                className="text-halomed-500 border-halomed-200"
+                              >
+                                Update Stock
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="expiring">
+            <div className="rounded-md border">
+              {isLoading ? (
+                <div className="flex justify-center items-center h-64">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-halomed-500"></div>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[250px]">Medicine Name</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Expiry Date</TableHead>
+                      <TableHead>Stock</TableHead>
+                      <TableHead>Batch No</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {medicines.filter(m => {
+                      const expiryDate = new Date(m.expiry);
+                      const threeMonthsFromNow = new Date();
+                      threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
+                      return expiryDate < threeMonthsFromNow;
+                    }).length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center h-24">
+                          No medicines expiring soon
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      medicines
+                        .filter(m => {
+                          const expiryDate = new Date(m.expiry);
+                          const threeMonthsFromNow = new Date();
+                          threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
+                          return expiryDate < threeMonthsFromNow;
+                        })
+                        .sort((a, b) => new Date(a.expiry).getTime() - new Date(b.expiry).getTime())
+                        .map((medicine) => (
+                          <TableRow key={medicine.id}>
+                            <TableCell className="font-medium">
+                              <div>
+                                {medicine.name}
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  {medicine.manufacturer}
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>{medicine.category}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-red-500 border-red-200 bg-red-50">
+                                {new Date(medicine.expiry).toLocaleDateString('en-IN')}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{medicine.stock} units</TableCell>
+                            <TableCell>{medicine.batchNo}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleEdit(medicine)}
+                                >
+                                  Update
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleDeleteClick(medicine.id)}
+                                  className="text-red-500 border-red-200"
+                                >
+                                  Remove
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                    )}
+                  </TableBody>
+                </Table>
+              )}
             </div>
           </TabsContent>
         </Tabs>
       </div>
 
-      {/* Add/Edit Medicine Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent className="sm:max-w-[525px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -888,7 +1048,6 @@ const Inventory: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
       <Dialog open={isConfirmDeleteOpen} onOpenChange={setIsConfirmDeleteOpen}>
         <DialogContent>
           <DialogHeader>
